@@ -187,7 +187,7 @@ impl<UP: UserPresence, T: TrussedRequirements> Authenticator for crate::Authenti
                     {
                         info_now!("Excluded!");
                         self.up
-                            .user_present(&mut self.trussed, constants::FIDO2_UP_TIMEOUT)?;
+                            .get_consent(&mut self.trussed, b"ctap2:mkcred:1")?;
                         return Err(Error::CredentialExcluded);
                     }
                 }
@@ -254,8 +254,14 @@ impl<UP: UserPresence, T: TrussedRequirements> Authenticator for crate::Authenti
         // debug_now!("hmac-secret = {:?}, credProtect = {:?}", hmac_secret_requested, cred_protect_requested);
 
         // 10. get UP, if denied error OperationDenied
+	let mut consent_msg: [u8; 136] = [0x0d; 136];
+	consent_msg[0..15].copy_from_slice(b"CTAP2 REGISTER\n");
+	if let Some(rpname) = &parameters.rp.name {
+		let l = rpname.as_bytes().len();
+		consent_msg[15..15+l].copy_from_slice(rpname.as_bytes());
+	}
         self.up
-            .user_present(&mut self.trussed, constants::FIDO2_UP_TIMEOUT)?;
+            .get_consent(&mut self.trussed, &consent_msg)?;
 
         // 11. generate credential keypair
         let location = match rk_requested {
@@ -556,7 +562,7 @@ impl<UP: UserPresence, T: TrussedRequirements> Authenticator for crate::Authenti
         // denied -> OperationDenied
         // timeout -> UserActionTimeout
         self.up
-            .user_present(&mut self.trussed, constants::FIDO2_UP_TIMEOUT)?;
+            .get_consent(&mut self.trussed, b"ctap2:reset")?;
 
         // Delete resident keys
         syscall!(self.trussed.delete_all(Location::Internal));
@@ -575,7 +581,7 @@ impl<UP: UserPresence, T: TrussedRequirements> Authenticator for crate::Authenti
 
     fn selection(&mut self) -> Result<()> {
         self.up
-            .user_present(&mut self.trussed, constants::FIDO2_UP_TIMEOUT)
+            .get_consent(&mut self.trussed, b"ctap2:selection")
     }
 
     #[inline(never)]
@@ -933,8 +939,12 @@ impl<UP: UserPresence, T: TrussedRequirements> Authenticator for crate::Authenti
         // 7. collect user presence
         let up_performed = if do_up {
             info_now!("asking for up");
+	    let mut consent_msg: [u8; 80] = [0x0d; 80];
+	    consent_msg[0..12].copy_from_slice(b"CTAP2 LOGIN\n");
+	    let l = parameters.rp_id.as_bytes().len();
+	    consent_msg[12..12+l].copy_from_slice(parameters.rp_id.as_bytes());
             self.up
-                .user_present(&mut self.trussed, constants::FIDO2_UP_TIMEOUT)?;
+                .get_consent(&mut self.trussed, &consent_msg)?;
             true
         } else {
             info_now!("not asking for up");
@@ -1272,7 +1282,7 @@ impl<UP: UserPresence, T: TrussedRequirements> crate::Authenticator<UP, T> {
         if let Some(pin_auth) = pin_auth.as_ref() {
             if pin_auth.len() == 0 {
                 self.up
-                    .user_present(&mut self.trussed, constants::FIDO2_UP_TIMEOUT)?;
+                    .get_consent(&mut self.trussed, b"ctap2:pinpre")?;
                 if !self.state.persistent.pin_is_set() {
                     return Err(Error::PinNotSet);
                 } else {

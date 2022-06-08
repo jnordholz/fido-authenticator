@@ -34,8 +34,9 @@ impl<UP: UserPresence, T: TrussedRequirements> Authenticator for crate::Authenti
     /// Also note that CTAP1 credentials should be assertable over CTAP2. I believe this is
     /// currently not the case.
     fn register(&mut self, reg: &register::Request) -> Result<register::Response> {
+        let consent_msg = b"U2F REGISTER";
         self.up
-            .user_present(&mut self.trussed, constants::U2F_UP_TIMEOUT)
+            .get_consent(&mut self.trussed, consent_msg)
             .map_err(|_| Error::ConditionsOfUseNotSatisfied)?;
 
         // Generate a new P256 key pair.
@@ -186,8 +187,9 @@ impl<UP: UserPresence, T: TrussedRequirements> Authenticator for crate::Authenti
                 };
             }
             ControlByte::EnforceUserPresenceAndSign => {
+                let consent_msg = b"U2F AUTHENTICATE";
                 self.up
-                    .user_present(&mut self.trussed, constants::U2F_UP_TIMEOUT)
+                    .get_consent(&mut self.trussed, consent_msg)
                     .map_err(|_| Error::ConditionsOfUseNotSatisfied)?;
                 0x01
             }

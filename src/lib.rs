@@ -165,6 +165,11 @@ pub trait UserPresence: Copy {
         trussed: &mut T,
         timeout_milliseconds: u32,
     ) -> Result<()>;
+
+    fn get_consent<T: TrussedClient>(
+	self,
+	trussed: &mut T,
+	message: &[u8]) -> Result<()>;
 }
 
 #[deprecated(note = "use `Silent` directly`")]
@@ -177,6 +182,10 @@ pub struct Silent {}
 
 impl UserPresence for Silent {
     fn user_present<T: TrussedClient>(self, _: &mut T, _: u32) -> Result<()> {
+        Ok(())
+    }
+
+    fn get_consent<T: TrussedClient>(self, _: &mut T, _: &[u8]) -> Result<()> {
         Ok(())
     }
 }
@@ -199,6 +208,14 @@ impl UserPresence for Conforming {
         result.map_err(|err| match err {
             trussed::types::consent::Error::TimedOut => Error::UserActionTimeout,
             // trussed::types::consent::Error::TimedOut => Error::KeepaliveCancel,
+            _ => Error::OperationDenied,
+        })
+    }
+
+    fn get_consent<T: TrussedClient>(self, trussed: &mut T, message: &[u8]) -> Result<()> {
+        let result = syscall!(trussed.confirm_gui_user_present(message)).result;
+        result.map_err(|err| match err {
+            trussed::types::consent::Error::TimedOut => Error::UserActionTimeout,
             _ => Error::OperationDenied,
         })
     }
